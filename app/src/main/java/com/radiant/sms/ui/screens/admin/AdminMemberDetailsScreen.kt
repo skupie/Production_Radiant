@@ -1,3 +1,79 @@
+package com.radiant.sms.ui.screens.admin
+
+import android.app.Application
+import android.widget.Toast
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
+import coil.compose.SubcomposeAsyncImage
+import coil.request.ImageRequest
+import com.radiant.sms.data.Repository
+import com.radiant.sms.network.AdminMemberDetailsDto
+import com.radiant.sms.network.NetworkModule
+import com.radiant.sms.util.MultipartUtil
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
+import okhttp3.MultipartBody
+
+// State to hold member details loading, error, and member info
+data class AdminMemberDetailsState(
+    val loading: Boolean = true,
+    val error: String? = null,
+    val member: AdminMemberDetailsDto? = null
+)
+
+// ViewModel for managing state and API calls
+class AdminMemberDetailsViewModel(app: Application) : AndroidViewModel(app) {
+    private val repo = Repository(NetworkModule.api(app.applicationContext))
+
+    private val _state = MutableStateFlow(AdminMemberDetailsState())
+    val state: StateFlow<AdminMemberDetailsState> = _state
+
+    // Load member details by ID
+    fun load(memberId: Long) {
+        viewModelScope.launch {
+            try {
+                _state.value = AdminMemberDetailsState(loading = true)
+                val resp = repo.adminMemberDetails(memberId)
+                _state.value = AdminMemberDetailsState(loading = false, member = resp.member)
+            } catch (e: Exception) {
+                _state.value = AdminMemberDetailsState(loading = false, error = e.message ?: "Failed")
+            }
+        }
+    }
+
+    // Update member details
+    fun update(memberId: Long, parts: List<MultipartBody.Part>, onDone: () -> Unit) {
+        viewModelScope.launch {
+            try {
+                repo.adminUpdateMember(memberId, parts)
+                onDone()
+            } catch (e: Exception) {
+                _state.value = _state.value.copy(error = e.message ?: "Update failed")
+            }
+        }
+    }
+}
+
 @Composable
 fun AdminMemberDetailsScreen(
     nav: NavController,
@@ -55,6 +131,7 @@ fun AdminMemberDetailsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                // ✅ FIX: keep content close to top, but safe from system bars
                 .padding(top = 6.dp)
                 .statusBarsPadding()
                 .verticalScroll(scrollState)
