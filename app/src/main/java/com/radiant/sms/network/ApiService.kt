@@ -71,7 +71,7 @@ interface ApiService {
 
     @Multipart
     @Headers("Accept: application/json")
-    @POST("api/admin/members/{member}")
+    @PATCH("api/admin/members/{member}")
     suspend fun adminUpdateMember(
         @Path("member") memberId: Long,
         @Part parts: List<MultipartBody.Part>
