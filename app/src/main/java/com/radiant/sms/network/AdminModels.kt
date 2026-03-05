@@ -21,7 +21,13 @@ data class AdminMemberDto(
 )
 
 /**
- * Matches web OpenAPI: GET /api/admin/members/{member}
+ * GET /api/admin/members/{member}
+ *
+ * Backend returns:
+ * {
+ *   "member": { ...MemberResource... },
+ *   "due_summary": { ... } // ignored here
+ * }
  */
 @JsonClass(generateAdapter = true)
 data class AdminMemberDetailsResponse(
@@ -40,6 +46,11 @@ data class AdminMemberDetailsDto(
     @Json(name = "nominee_name") val nomineeName: String? = null,
     @Json(name = "nominee_nid") val nomineeNid: String? = null,
 
+    // ✅ Use RELATIVE paths for reliable image rendering in Edit/Update screen
+    @Json(name = "image") val image: String? = null,
+    @Json(name = "nominee_photo") val nomineePhoto: String? = null,
+
+    // Kept (optional) — some APIs also send absolute URLs
     @Json(name = "image_url") val imageUrl: String? = null,
     @Json(name = "nominee_photo_url") val nomineePhotoUrl: String? = null,
 
