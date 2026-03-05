@@ -9,7 +9,7 @@ object ApiClient {
 
     // ✅ Put your real base url here (example)
     // Must end with /
-    private const val BASE_URL = "https://basic.bd-d.online/"
+    private const val BASE_URL = "https://radiant.smscloudapp.top/"
 
     private val logger = HttpLoggingInterceptor().apply {
         level = HttpLoggingInterceptor.Level.BODY
