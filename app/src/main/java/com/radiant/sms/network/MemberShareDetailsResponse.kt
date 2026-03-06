@@ -3,6 +3,10 @@ package com.radiant.sms.network
 import com.squareup.moshi.Json
 import com.squareup.moshi.JsonClass
 
+private fun firstNotBlank(vararg values: String?): String? {
+    return values.firstOrNull { !it.isNullOrBlank() }
+}
+
 @JsonClass(generateAdapter = true)
 data class MemberShareDetailsResponse(
     // Common nested variants
@@ -16,7 +20,7 @@ data class MemberShareDetailsResponse(
     @Json(name = "nominee_info") val nomineeInfo: NomineeInfo? = null,
     @Json(name = "nominee_details") val nomineeDetails: NomineeInfo? = null,
 
-    // Flat fallback variants (some APIs return these at top-level)
+    // Flat fallback variants
     @Json(name = "share_no") val shareNoFlat: String? = null,
     @Json(name = "share_amount") val shareAmountFlat: String? = null,
     @Json(name = "total_deposit") val totalDepositFlat: String? = null,
@@ -27,10 +31,10 @@ data class MemberShareDetailsResponse(
     @Json(name = "nominee_relation") val nomineeRelationFlat: String? = null,
     @Json(name = "nominee_nid") val nomineeNidFlat: String? = null,
     @Json(name = "nominee_address") val nomineeAddressFlat: String? = null,
-    @Json(name = "nominee_photo") val nomineePhotoFlat: String? = null
+    @Json(name = "nominee_photo") val nomineePhotoFlat: String? = null,
+    @Json(name = "nominee_photo_url") val nomineePhotoUrlFlat: String? = null
 ) {
 
-    /** Always pick the best available share object */
     val resolvedShare: ShareInfo?
         get() = share ?: shareInfo ?: shareDetails ?: run {
             if (
@@ -38,34 +42,71 @@ data class MemberShareDetailsResponse(
                 shareAmountFlat == null &&
                 totalDepositFlat == null &&
                 createdAtFlat == null
-            ) null
-            else ShareInfo(
-                shareNoSnake = shareNoFlat,
-                shareAmountSnake = shareAmountFlat,
-                totalDepositSnake = totalDepositFlat,
-                createdAtSnake = createdAtFlat
-            )
+            ) {
+                null
+            } else {
+                ShareInfo(
+                    shareNoSnake = shareNoFlat,
+                    shareAmountSnake = shareAmountFlat,
+                    totalDepositSnake = totalDepositFlat,
+                    createdAtSnake = createdAtFlat
+                )
+            }
         }
 
-    /** Always pick the best available nominee object */
+    /**
+     * FIX:
+     * Some APIs return nominee name/nid inside nested nominee object,
+     * but nominee photo as flat nominee_photo / nominee_photo_url.
+     * So merge both instead of choosing only one source.
+     */
     val resolvedNominee: NomineeInfo?
-        get() = nominee ?: nomineeInfo ?: nomineeDetails ?: run {
-            if (
-                nomineeNameFlat == null &&
-                nomineePhoneFlat == null &&
-                nomineeRelationFlat == null &&
-                nomineeNidFlat == null &&
-                nomineeAddressFlat == null &&
-                nomineePhotoFlat == null
-            ) null
-            else NomineeInfo(
-                name = nomineeNameFlat,
-                phone = nomineePhoneFlat,
-                relation = nomineeRelationFlat,
-                nid = nomineeNidFlat,
-                address = nomineeAddressFlat,
-                photo = nomineePhotoFlat
+        get() {
+            val base = nominee ?: nomineeInfo ?: nomineeDetails
+
+            val merged = NomineeInfo(
+                name = firstNotBlank(base?.name, nomineeNameFlat),
+                fullName = base?.fullName,
+                nomineeName = base?.nomineeName,
+
+                phone = firstNotBlank(base?.phone, nomineePhoneFlat),
+                mobileNumber = base?.mobileNumber,
+
+                relation = firstNotBlank(base?.relation, nomineeRelationFlat),
+
+                nid = firstNotBlank(base?.nid, nomineeNidFlat),
+                nomineeNid = base?.nomineeNid,
+                nationalId = base?.nationalId,
+
+                address = firstNotBlank(base?.address, nomineeAddressFlat),
+
+                photo = firstNotBlank(base?.photo, nomineePhotoFlat),
+                image = base?.image,
+                avatar = base?.avatar,
+                profilePhoto = base?.profilePhoto,
+
+                profilePhotoUrl = firstNotBlank(base?.profilePhotoUrl, nomineePhotoUrlFlat),
+                nomineePhoto = firstNotBlank(base?.nomineePhoto, nomineePhotoFlat),
+                nomineePhotoUrl = firstNotBlank(base?.nomineePhotoUrl, nomineePhotoUrlFlat),
+
+                imageUrl = base?.imageUrl,
+                photoUrl = base?.photoUrl
             )
+
+            return if (
+                firstNotBlank(
+                    merged.displayName,
+                    merged.displayPhone,
+                    merged.relation,
+                    merged.displayNid,
+                    merged.address,
+                    merged.displayPhotoUrl
+                ).isNullOrBlank()
+            ) {
+                null
+            } else {
+                merged
+            }
         }
 }
 
@@ -82,35 +123,42 @@ data class MemberInfo(
     @Json(name = "member_id") val memberIdSnake: String? = null,
     @Json(name = "id") val id: String? = null,
 
-    // ✅ NID variants
     @Json(name = "nid") val nid: String? = null,
     @Json(name = "national_id") val nationalId: String? = null,
     @Json(name = "member_nid") val memberNid: String? = null,
 
-    // photo variants
     @Json(name = "photo") val photo: String? = null,
     @Json(name = "image") val image: String? = null,
     @Json(name = "avatar") val avatar: String? = null,
     @Json(name = "profile_photo") val profilePhoto: String? = null,
-    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null
+    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null,
+    @Json(name = "image_url") val imageUrl: String? = null,
+    @Json(name = "photo_url") val photoUrl: String? = null
 ) {
     val displayName: String?
-        get() = name ?: fullName
+        get() = firstNotBlank(name, fullName)
 
     val displayPhone: String?
-        get() = phone ?: mobileNumber
+        get() = firstNotBlank(phone, mobileNumber)
 
     val displayMemberId: String?
-        get() = memberIdSnake ?: id
+        get() = firstNotBlank(memberIdSnake, id)
 
     val displayNid: String?
-        get() = nid ?: nationalId ?: memberNid
+        get() = firstNotBlank(nid, nationalId, memberNid)
 
-    /**
-     * ✅ FIX: Convert relative path -> absolute URL
-     */
     val displayPhotoUrl: String?
-        get() = NetworkModule.absoluteUrl(profilePhotoUrl ?: profilePhoto ?: avatar ?: image ?: photo)
+        get() = NetworkModule.absoluteUrl(
+            firstNotBlank(
+                profilePhotoUrl,
+                imageUrl,
+                photoUrl,
+                profilePhoto,
+                avatar,
+                image,
+                photo
+            )
+        )
 }
 
 @JsonClass(generateAdapter = true)
@@ -128,21 +176,23 @@ data class ShareInfo(
     @Json(name = "createdAt") val createdAtCamel: String? = null
 ) {
     val displayShareNo: String?
-        get() = shareNoSnake ?: shareNoCamel
+        get() = firstNotBlank(shareNoSnake, shareNoCamel)
 
     val displayShareAmount: String?
-        get() = shareAmountSnake ?: shareAmountCamel
+        get() = firstNotBlank(shareAmountSnake, shareAmountCamel)
 
     val displayTotalDeposit: String?
-        get() = totalDepositSnake ?: totalDepositCamel
+        get() = firstNotBlank(totalDepositSnake, totalDepositCamel)
 
     val displayCreatedAt: String?
-        get() = createdAtSnake ?: createdAtCamel
+        get() = firstNotBlank(createdAtSnake, createdAtCamel)
 }
 
 @JsonClass(generateAdapter = true)
 data class NomineeInfo(
     @Json(name = "name") val name: String? = null,
+    @Json(name = "full_name") val fullName: String? = null,
+    @Json(name = "nominee_name") val nomineeName: String? = null,
 
     @Json(name = "phone") val phone: String? = null,
     @Json(name = "mobile_number") val mobileNumber: String? = null,
@@ -150,28 +200,44 @@ data class NomineeInfo(
     @Json(name = "relation") val relation: String? = null,
 
     @Json(name = "nid") val nid: String? = null,
+    @Json(name = "nominee_nid") val nomineeNid: String? = null,
+    @Json(name = "national_id") val nationalId: String? = null,
 
     @Json(name = "address") val address: String? = null,
 
-    // Photo variants
     @Json(name = "photo") val photo: String? = null,
     @Json(name = "image") val image: String? = null,
     @Json(name = "avatar") val avatar: String? = null,
     @Json(name = "profile_photo") val profilePhoto: String? = null,
-    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null
+    @Json(name = "profile_photo_url") val profilePhotoUrl: String? = null,
+
+    @Json(name = "nominee_photo") val nomineePhoto: String? = null,
+    @Json(name = "nominee_photo_url") val nomineePhotoUrl: String? = null,
+
+    @Json(name = "image_url") val imageUrl: String? = null,
+    @Json(name = "photo_url") val photoUrl: String? = null
 ) {
     val displayName: String?
-        get() = name
+        get() = firstNotBlank(name, fullName, nomineeName)
 
     val displayPhone: String?
-        get() = phone ?: mobileNumber
+        get() = firstNotBlank(phone, mobileNumber)
 
     val displayNid: String?
-        get() = nid
+        get() = firstNotBlank(nid, nomineeNid, nationalId)
 
-    /**
-     * ✅ FIX: Convert relative path -> absolute URL
-     */
     val displayPhotoUrl: String?
-        get() = NetworkModule.absoluteUrl(profilePhotoUrl ?: profilePhoto ?: avatar ?: image ?: photo)
+        get() = NetworkModule.absoluteUrl(
+            firstNotBlank(
+                profilePhotoUrl,
+                nomineePhotoUrl,
+                imageUrl,
+                photoUrl,
+                profilePhoto,
+                nomineePhoto,
+                avatar,
+                image,
+                photo
+            )
+        )
 }
